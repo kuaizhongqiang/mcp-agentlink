@@ -84,6 +84,8 @@ package-name/
 
 所有 issue 必须通过 skill 提交，确保结构化。
 
+> **Phase 1 豁免**：skill（`/agentlink` 命令）是 Phase 2 产物。Phase 1 开发期间允许通过 GitHub Web UI 直接提交 issue，skill 就绪后切换。
+
 ### Issue 模板
 
 ```yaml
@@ -106,6 +108,8 @@ priority:  # high | medium | low
 ## 四、PR 规则
 
 所有 PR 必须通过 skill 提交，必须关联 issue。
+
+> **Phase 1 豁免**：同上，Phase 1 期间允许通过 GitHub Web UI 直接提交 PR。
 
 ### PR 模板
 
