@@ -1,0 +1,65 @@
+/**
+ * mcp-agentlink token generate | revoke | list
+ */
+
+import type { Command } from "commander";
+import { getApp } from "../app/index.js";
+import { TokenStore } from "../storage/tokens.js";
+
+export function registerTokenCommands(program: Command): void {
+  const token = program.command("token").description("Manage access tokens");
+
+  token
+    .command("generate")
+    .description("Generate a new token for a project and role")
+    .requiredOption("--project <id>", "Project ID")
+    .requiredOption("--role <role>", "Role name (kebab-case)")
+    .action(async (options: { project: string; role: string }) => {
+      const db = await getApp();
+      const store = new TokenStore(db);
+      const { token: raw, tokenData } = store.generate(
+        options.project,
+        options.role
+      );
+      console.log(`✅ Token generated:`);
+      console.log(`  Token:       ${raw}`);
+      console.log(`  ID:          ${tokenData.id}`);
+      console.log(`  Role:        ${tokenData.role}`);
+      console.log(`  Status:      ${tokenData.status}`);
+      console.log(`  ⚠️  This is the only time the raw token is shown.`);
+    });
+
+  token
+    .command("revoke <token>")
+    .description("Revoke a token")
+    .action(async (tokenArg: string) => {
+      const db = await getApp();
+      const store = new TokenStore(db);
+      const revoked = store.revoke(tokenArg);
+      if (!revoked) {
+        console.error("❌ Token not found or already revoked");
+        process.exit(1);
+      }
+      console.log(`✅ Token revoked: ${revoked.id}`);
+    });
+
+  token
+    .command("list")
+    .description("List all tokens for a project")
+    .requiredOption("--project <id>", "Project ID")
+    .action(async (options: { project: string }) => {
+      const db = await getApp();
+      const store = new TokenStore(db);
+      const tokens = store.list(options.project);
+      if (tokens.length === 0) {
+        console.log("No tokens found for this project.");
+        return;
+      }
+      for (const t of tokens) {
+        const icon = t.status === "active" ? "🟢" : "🔴";
+        console.log(
+          `  ${icon} ${t.id.padEnd(36)} ${t.role.padEnd(20)} ${t.status}`
+        );
+      }
+    });
+}

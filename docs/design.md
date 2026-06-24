@@ -52,8 +52,8 @@ Event {
   summary: string,          // 一句话摘要
   scope: string,            // 谁应该看到：role 名称 或 "*"
   docRef?: {
-    path: string,           // 文档路径（相对仓库根）
-    script: string          // 相关脚本/文件路径
+    path?: string,          // 文档路径（相对仓库根，与 script 至少提供一个）
+    script?: string         // 相关脚本/文件路径
   },
   timestamp: string
 }
@@ -70,7 +70,7 @@ Event {
 agent 可以随时关闭 mcp-agentlink 连接，避免不必要的 context 开销：
 
 ```markdown
-## mcp-agentlink 配置
+## mcp-agentlink Config
 
 enabled: true    ← false 时断开连接
 project: payment-rebuild
@@ -79,11 +79,12 @@ sender: repo-A/coder
 workpath: /home/user/repo-A
 giturl: https://github.com/user/repo-A
 server_url: https://mcp-agentlink.example.com
-token: xxx
 ```
 
 - `enabled: false` → 不 register、不 postEvent、不 queryEvents
 - `enabled: true` → 正常走完整流程
+
+**Token 安全：** token 不写入版本控制文件。`init` 流程将 token 存入独立文件 `.mcp-agentlink.token`，加入 `.gitignore`。Agent 运行时从该文件读取 token，**工作区文件（CLAUDE.md / AGENTS.md / CODEBUDDY.md）不包含 token**。
 
 ---
 
@@ -98,7 +99,7 @@ token: xxx
 | 部署 | Linux 服务器裸跑 |
 | 管理 | 自带 CLI 命令 + OpenClaw 调用 |
 | 传输 | MCP over SSE |
-| 存储 | SQLite |
+| 存储 | SQLite（sql.js，纯 JS/WASM，无需编译） |
 | 鉴权 | Role 级别 token |
 
 **CLI 命令清单：**
@@ -158,8 +159,9 @@ Step 4: Agent 写入 workspace 文件（CLAUDE.md / AGENTS.md）
         │   sender: <id>
         │   workpath: <本地路径>
         │   giturl: <远程地址>
-        │   token: <token>
         │   server_url: <url>
+        │   同时将 token 写入 .mcp-agentlink.token（已在 .gitignore 中）
+        │   注：token 不写入版本控制文件，防止泄露到仓库历史
     ↓
 Step 5: Agent 调用 register tool → 中心确认
     ↓
@@ -168,32 +170,109 @@ Step 6: Agent 就绪，开始工作
 
 ---
 
-## 五、MVP MCP Tools
+## 五、MVP 接口定义
 
-一共 4 个 tool：
+### 分层说明
 
-### init
+系统分两层：
 
-- 触发 Q&A 流程
-- 将注册信息写入 workspace 文件
-- 等同于在 agent 上下文中注入"你是谁、你在哪、怎么连接"
+|层|职责|示例|
+|---|---|------|
+|**Client 本地操作**|纯本地，不调服务端 API|`init` — Q&A 引导 + 写配置文件|
+|**Server MCP Tools**|服务端提供，client 通过 MCP 协议代理调用|`register`、`postEvent`、`queryEvents`|
 
-### register
+Client 包不重复实现 `register/postEvent/queryEvents`——它通过 MCP 协议代理到 server 端执行。
 
-- agent 向中心注册（project + sender + role + workpath + giturl）
+---
+
+### Client 本地操作：init
+
+- 触发 Q&A 流程，采集：project / role / sender / workpath / giturl / server_url / token
+- 将非敏感配置写入 workspace 文件（CLAUDE.md / AGENTS.md）
+- 将 token 写入独立文件 `.mcp-agentlink.token`（已在 `.gitignore` 中）
+- **不调用任何服务端 API**
+
+```typescript
+interface InitParams {
+  project: string;
+  role: string;         // kebab-case
+  sender: string;       // 格式: <repo>/<agent-id>
+  workpath: string;     // 本地绝对路径
+  giturl: string;       // Git 远程地址
+  server_url: string;   // MCP 服务器地址
+  token: string;        // 写入 .mcp-agentlink.token，不入 workspace
+}
+// 返回: { configWritten: boolean }
+```
+
+---
+
+### Server MCP Tools
+
+所有 server tool 统一鉴权方式：请求头携带 token。错误响应统一格式（见 §七 错误码）。
+
+#### register
+
+agent 向中心注册身份和路径。
+
+```typescript
+interface RegisterParams {
+  project: string;
+  sender: string;
+  role: string;
+  workpath: string;
+  giturl: string;
+  token: string;
+}
+// 返回: { registrationId: string, status: "online" }
+```
+
 - 使用 token 鉴权
 - 中心记录 agent 在线状态
+- **幂等规则**：
+  - 同一 agent 用相同 sender 重新 register → 更新 `last_seen` + `workpath`/`giturl`，不报错
+  - 不同 agent 试图用已被占用的 sender 注册 → 返回 `SENDER_CONFLICT` 错误
+  - 实现：`registrations` 表加 `(project_id, sender)` UNIQUE 约束，register 时检查 sender 是否已被**不同** registration_id 占用
 
-### postEvent
+#### postEvent
 
-- 向中心发送一条事件
-- 包含：type / summary / scope / docRef
+向中心发送一条事件。
+
+```typescript
+interface PostEventParams {
+  project: string;
+  type: "start" | "finish" | "milestone" | "error" | "assignment";
+  summary: string;       // 一句话摘要（省 token）
+  scope: string;         // 目标 role 名称，或 "*" 表示所有人
+  docRef?: {
+    path?: string;        // 文档路径（相对仓库根，与 script 至少提供一个）
+    script?: string;      // 相关脚本/文件路径
+  };
+  token: string;
+}
+// 返回: { eventId: string }
+```
+
 - agent 完成长任务链时自动调用
+- 若 scope 指向特定 role，agent 提示用户手动通知下游
 
-### queryEvents
+#### queryEvents
 
-- 从中心查询事件
-- 过滤条件：project / scope / type / 时间范围
+从中心查询事件。
+
+```typescript
+interface QueryEventsParams {
+  project: string;
+  scope?: string;       // 按 role 过滤，缺省返回全部
+  type?: string;        // 按事件类型过滤
+  sinceId?: string;     // 只返回大于此 ID 的新事件（client 本地游标用）
+  token: string;
+}
+// 返回: { events: Event[] }
+```
+
+- client 端维护 `last_queried_event_id` 游标，避免重复拉取已处理事件
+- Event 结构见 §二 Event
 
 ---
 
@@ -228,15 +307,54 @@ skill.md 中定义的 agent 行为（非 slash command，自动执行）：
 **Token 使用方式：**
 1. 管理员通过 CLI 为 project 下的每个 role 生成 token
 2. token 分发给对应 role 的 agent 使用者
-3. agent 在 init 时由用户手动填入
+3. agent 在 init 时由用户手动填入，存入 `.mcp-agentlink.token`（不入版本控制）
 4. 每次 MCP 调用携带 token
 5. 项目归档后 token 自动失效
+
+**Token 格式：**
+
+```text
+生成: crypto.randomBytes(32).toString('hex')  →  64 字符 hex 字符串
+存储: SHA-256 哈希存入 tokens.token_hash，原始 token 永远不落盘
+传输: 请求头 Bearer 或参数 token
+```
+
+---
+
+### 错误码
+
+所有 Server MCP Tool 返回统一错误格式：
+
+```typescript
+interface ErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    detail?: any;
+  }
+}
+```
+
+预定义错误码：
+
+|错误码|HTTP 类比|触发条件|
+|---|---|------|
+|`INVALID_TOKEN`|401|token 无效或已吊销|
+|`PROJECT_NOT_FOUND`|404|project 不存在或已归档|
+|`UNAUTHORIZED_SCOPE`|403|token 的 role 无权访问目标 scope|
+|`VALIDATION_ERROR`|400|请求参数不合法（缺字段/格式错）|
+|`SENDER_CONFLICT`|409|sender 已被**不同 agent** 占用；同一 agent 重复注册幂等不报错|
+|`INTERNAL_ERROR`|500|服务端内部错误|
 
 ---
 
 ## 八、存储设计
 
-### 数据库：SQLite
+### 数据库：SQLite（sql.js）
+
+实现使用 **sql.js**（SQLite 编译为 WebAssembly，纯 JS 无原生编译依赖）
+而非 `better-sqlite3`（需要 C++ 编译工具链），以降低 Windows 环境安装门槛。
+需原生性能时可切换为 `better-sqlite3`——API 层面已做抽象，更换驱动只需修改 `database.ts`。
 
 ```sql
 -- 项目表
@@ -263,6 +381,20 @@ tokens (
   id, project_id, role, token_hash, status (active/revoked), created_at
 )
 ```
+
+**并发处理：** MVP 阶段启用 WAL 模式（`PRAGMA journal_mode=WAL`），写操作加超时重试。Phase 3 评估是否需要迁移到 PostgreSQL。
+
+**数据库迁移：** 采用文件约定 + CLI 命令：
+
+```text
+packages/server/migrations/
+├── 001_initial.sql           # 初始建表
+├── 002_add_event_index.sql   # 新增索引
+└── ...
+```
+
+- CLI 命令：`mcp-agentlink server migrate` 按序号顺序执行未应用的迁移
+- 通过 `_migrations` 表记录已应用的迁移版本
 
 ---
 
@@ -321,11 +453,13 @@ Server 骨架:
   ├── SQLite 建表（projects / registrations / events / tokens）
   └── CRUD 操作
 
-MCP Tools:
+Server MCP Tools:
   ├── register（身份注册 + 路径登记）
   ├── postEvent（发事件）
-  ├── queryEvents（查事件）
-  └── init（Q&A 引导，写入 workspace）
+  └── queryEvents（查事件）
+
+Client 本地功能:
+  └── init（Q&A 引导，写入 workspace 和 token 文件）
 
 Client 包:
   ├── skill.md（行为规则）

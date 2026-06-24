@@ -55,10 +55,10 @@
 
 **Agent 安装流程：**
 
-```
+```text
 1. Agent 执行 npm install mcp-agentlink-client
 2. 读取 README.md → 理解项目概念（Project / Sender / Role）
-3. 读取 skill/ 下的 skill.md → 获得 slash command 能力
+3. 读取 skill/ 下的 skill.md → 获得行为规则
 4. 连接中心服务器 → 注册（project + sender + role）
 5. 开始工作
 ```
@@ -70,7 +70,7 @@
 两个包各自独立版本号，各自走 CI/CD 流水线：
 
 ```
-push → test → build → tag vX.Y.Z → npm publish
+push → lint/typecheck → test → build → tag vX.Y.Z → npm publish
 ```
 
 - 版本号各自独立（server v0.1.0 + client v0.2.0 可以不同步）
@@ -94,14 +94,17 @@ push → test → build → tag vX.Y.Z → npm publish
 
 ---
 
-## 当前状态
+## Phase 1 实现状态
 
-- [x] 整体架构对齐
-- [ ] 数据协议定义（中心存什么、格式是什么）
-- [ ] MCP Tool 清单（暴露哪些能力）
-- [ ] 鉴权模型（谁可以读写什么）
-- [ ] Skill.md 编写
-- [ ] Server 代码实现
-- [ ] Client 代码实现
-- [ ] CI/CD 搭建
-- [ ] 首版发布
+|步骤|模块|状态|
+|---|---|---|
+|1|Monorepo scaffold|✅|
+|2|Server CLI 框架|✅|
+|3|SQLite 存储层|✅|
+|4|MCP over SSE 传输|✅|
+|5|Auth 鉴权中间件|✅|
+|6|Server MCP Tools|✅|
+|7|Client npm 包|✅|
+|8|CI/CD + CHANGELOG|✅|
+
+**Phase 1 v0.1.0 全部完成。** 下一步：Phase 2。

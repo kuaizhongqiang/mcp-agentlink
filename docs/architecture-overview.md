@@ -56,9 +56,29 @@ mcp-agentlink 通过两层方式交付：
 
 ---
 
-## 通信流程（草案）
+## 通信流程
 
+### MVP 阶段（Pull 模式）
+
+```text
+Agent A                         mcp-agentlink                       Agent B
+   |                                  |                                  |
+   |---- register(sender, role) ----->|                                  |
+   |---- postEvent(type, summary) --->|                                  |
+   |                                  |<--- queryEvents(scope) ---------|
+   |                                  |--- { events } ----------------->|
+   |<--- queryEvents(scope) ----------|                                  |
+   |--- { events } ------------------>|                                  |
 ```
+
+1. Agent 启动时向中心注册（project + sender + role）
+2. Agent 完成关键任务后向其 `postEvent`
+3. 其他 Agent 按需 `queryEvents` 拉取跟自己 scope 相关的事件
+4. 若事件 scope 指向特定 role，agent 提示用户手动通知下游
+
+### 目标态（Phase 2-3，未来扩展）
+
+```text
 Agent A                         mcp-agentlink                       Agent B
    |                                  |                                  |
    |---- register(sender, role) ----->|                                  |
@@ -66,14 +86,9 @@ Agent A                         mcp-agentlink                       Agent B
    |                                  |---- notify(change, sender) ---->|
    |                                  |<--- ack -------------------------|
    |<--- relevant changes ------------|                                  |
-   |                                  |                                  |
 ```
 
-1. Agent 启动时向中心注册（project + sender + role）
-2. Agent 工作时可以创建文件链接（"我关注这个文件"）
-3. Agent 发生变更时通知中心
-4. 中心按 role / 链接关系，将变更推送给相关 Agent
-5. Agent 查询上下文时，中心返回聚合结果
+未来版本支持文件链接和主动推送，但 MVP 保持纯 Pull 的简洁模型。
 
 ---
 
@@ -84,5 +99,6 @@ Agent A                         mcp-agentlink                       Agent B
 | 协议 | MCP (Model Context Protocol) |
 | 语言 | TypeScript / Node.js |
 | 传输 | stdio（本地开发）/ SSE（公网部署） |
-| 存储 | 待定（SQLite / PostgreSQL / 其他） |
+| 存储 | SQLite（sql.js，纯 JS/WASM） |
+| 数据库 | SQLite WAL 模式（处理 MVP 阶段并发） |
 | SDK | `@modelcontextprotocol/sdk` |
