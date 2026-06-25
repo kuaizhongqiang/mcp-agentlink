@@ -32,7 +32,7 @@ const program = new Command();
 program
   .name("mcp-agentlink")
   .description("MCP server for cross-project, cross-agent communication")
-  .version("0.2.0");
+  .version("0.3.0");
 
 // Top-level status command — overview of server data
 program
