@@ -89,4 +89,43 @@ export class EventStore {
       [projectId]
     );
   }
+
+  /**
+   * Get event statistics for a project.
+   */
+  getStats(projectId: string): {
+    total: number;
+    byType: Record<string, number>;
+    byScope: Record<string, number>;
+    monthly: { month: string; count: number }[];
+  } {
+    const total =
+      this.db.exec<{ c: number }>(
+        "SELECT COUNT(*) as c FROM events WHERE project_id = ?",
+        [projectId]
+      )[0]?.c ?? 0;
+
+    const byTypeRows = this.db.exec<{ type: string; c: number }>(
+      "SELECT type, COUNT(*) as c FROM events WHERE project_id = ? GROUP BY type ORDER BY c DESC",
+      [projectId]
+    );
+    const byType: Record<string, number> = {};
+    for (const r of byTypeRows) byType[r.type] = r.c;
+
+    const byScopeRows = this.db.exec<{ scope: string; c: number }>(
+      "SELECT scope, COUNT(*) as c FROM events WHERE project_id = ? GROUP BY scope ORDER BY c DESC",
+      [projectId]
+    );
+    const byScope: Record<string, number> = {};
+    for (const r of byScopeRows) byScope[r.scope] = r.c;
+
+    const monthly = this.db.exec<{ month: string; count: number }>(
+      `SELECT strftime('%Y-%m', timestamp) as month, COUNT(*) as count
+       FROM events WHERE project_id = ?
+       GROUP BY month ORDER BY month DESC LIMIT 12`,
+      [projectId]
+    );
+
+    return { total, byType, byScope, monthly };
+  }
 }

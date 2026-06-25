@@ -1,5 +1,26 @@
 # Changelog — mcp-agentlink-server
 
+## [0.4.0] - 2026-06-25
+
+### Added
+
+- **Project unarchive**: `mcp-agentlink project unarchive <id>` restores archived projects, re-activates tokens and registrations
+- **Archive safety**: `--dry-run` preview and `--force` skip-confirmation flags on `project archive`
+- **File links cascade**: `--hard` archive mode now deletes associated file_links records
+- **Event purge completion**: `--all` (purge all events), `--dry-run` (preview count), and `--force` (skip prompt) flags
+- **Event statistics**: `mcp-agentlink event stats --project <id>` with breakdown by type, scope, and monthly trend
+- **SQLITE_BUSY retry**: Database `exec()` and `run()` operations auto-retry up to 3 times with exponential backoff
+- **Finer-grained auth**: Tokens now have a `permissions` column (`read`/`write`/`admin`); MCP tools enforce permission checks
+- **Token permissions CLI**: `mcp-agentlink token generate --perms <read|write|admin>`
+- **Dynamic version**: Version string read from `package.json` at startup — no more hardcoded drift
+- **Performance indexes**: Composite indexes for common event/registration/token query patterns (migration 004)
+- **Enhanced health endpoint**: `/health` now returns version, uptime, project/registration/event/token metrics
+- **Performance migration**: 004_performance_indexes.sql with composite indexes
+
+### Changed
+
+- Version bumped to 0.4.0
+
 ## [0.3.0] - 2026-06-25
 
 ### Added

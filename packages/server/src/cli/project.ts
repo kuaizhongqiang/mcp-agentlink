@@ -1,5 +1,5 @@
 /**
- * mcp-agentlink project create | archive | list | show
+ * mcp-agentlink project create | archive | unarchive | list | show
  */
 
 import type { Command } from "commander";
@@ -7,6 +7,7 @@ import { getApp } from "../app/index.js";
 import { ProjectStore } from "../storage/projects.js";
 import { TokenStore } from "../storage/tokens.js";
 import { RegistrationStore } from "../storage/registrations.js";
+import { FileLinkStore } from "../storage/fileLinks.js";
 
 export function registerProjectCommands(program: Command): void {
   const project = program.command("project").description("Manage projects");
@@ -26,40 +27,143 @@ export function registerProjectCommands(program: Command): void {
   project
     .command("archive <id>")
     .description("Archive a project, revoke tokens, and mark registrations offline")
+    .option("--dry-run", "Show what would be archived without executing")
+    .option("--force", "Skip confirmation prompt")
     .option(
       "--hard",
-      "Also delete all events and registrations (irreversible)"
+      "Also delete all events, registrations, and file links (irreversible)"
     )
-    .action(async (id: string, options: { hard?: boolean }) => {
+    .action(
+      async (
+        id: string,
+        options: { dryRun?: boolean; force?: boolean; hard?: boolean }
+      ) => {
+        const db = await getApp();
+        const projectStore = new ProjectStore(db);
+
+        const p = projectStore.findById(id);
+        if (!p) {
+          console.error(`❌ Project "${id}" not found`);
+          process.exit(1);
+        }
+
+        const tokenStore = new TokenStore(db);
+        const regStore = new RegistrationStore(db);
+        const linkStore = new FileLinkStore(db);
+
+        const activeTokens = db.exec<{ c: number }>(
+          "SELECT COUNT(*) as c FROM tokens WHERE project_id = ? AND status = 'active'",
+          [id]
+        )[0]?.c ?? 0;
+        const onlineRegs = db.exec<{ c: number }>(
+          "SELECT COUNT(*) as c FROM registrations WHERE project_id = ? AND status = 'online'",
+          [id]
+        )[0]?.c ?? 0;
+        const eventCount = db.exec<{ c: number }>(
+          "SELECT COUNT(*) as c FROM events WHERE project_id = ?",
+          [id]
+        )[0]?.c ?? 0;
+        const linkCount = db.exec<{ c: number }>(
+          "SELECT COUNT(*) as c FROM file_links WHERE project_id = ?",
+          [id]
+        )[0]?.c ?? 0;
+
+        // Dry-run: show what would happen
+        if (options.dryRun) {
+          console.log(`📋 Dry-run: archive "${id}" (${p.name})`);
+          console.log(`   🔑 Active tokens:    ${activeTokens} → revoked`);
+          console.log(`   📡 Online registrations: ${onlineRegs} → offline`);
+          if (options.hard) {
+            console.log(`   🗑️  Events:           ${eventCount} → deleted`);
+            console.log(`   🔗 File links:       ${linkCount} → deleted`);
+          }
+          console.log(`\n   Add --force to execute.`);
+          return;
+        }
+
+        // Confirmation prompt (skip with --force)
+        if (!options.force) {
+          console.log(`⚠️  About to archive project "${id}" (${p.name}):`);
+          console.log(`   Tokens: ${activeTokens} will be revoked`);
+          if (options.hard) {
+            console.log(`   This will PERMANENTLY delete ${eventCount} events and ${linkCount} file links.`);
+          }
+          console.log(`   Use --force to skip this prompt.`);
+          return;
+        }
+
+        // 1. Archive the project
+        const archived = projectStore.archive(id);
+        if (!archived) {
+          console.error(`❌ Project "${id}" not found`);
+          process.exit(1);
+        }
+
+        // 2. Revoke all tokens
+        const revokedTokens = tokenStore.revokeByProject(id);
+
+        // 3. Mark registrations offline
+        const takenOffline = regStore.markOfflineByProject(id);
+
+        console.log(`✅ Project "${id}" archived`);
+        console.log(`   🔑 Tokens revoked:      ${revokedTokens}`);
+        console.log(`   📡 Registrations offline: ${takenOffline}`);
+
+        // 4. Hard mode: delete events, registrations, and file links
+        if (options.hard) {
+          db.run("DELETE FROM events WHERE project_id = ?", [id]);
+          db.run("DELETE FROM registrations WHERE project_id = ?", [id]);
+          const deletedLinks = linkStore.deleteByProject(id);
+          console.log(`   🗑️  Events deleted:      ${eventCount}`);
+          console.log(`   🔗 File links deleted:  ${deletedLinks}`);
+          console.log(`   ⚠️  This is irreversible.`);
+        }
+      }
+    );
+
+  project
+    .command("unarchive <id>")
+    .description("Restore an archived project to active status")
+    .option("--force", "Skip confirmation prompt")
+    .action(async (id: string, options: { force?: boolean }) => {
       const db = await getApp();
       const projectStore = new ProjectStore(db);
 
-      // 1. Archive the project
-      const p = projectStore.archive(id);
+      const p = projectStore.findById(id);
       if (!p) {
         console.error(`❌ Project "${id}" not found`);
         process.exit(1);
       }
-
-      // 2. Revoke all tokens
-      const tokenStore = new TokenStore(db);
-      const revokedTokens = tokenStore.revokeByProject(id);
-
-      // 3. Mark registrations offline
-      const regStore = new RegistrationStore(db);
-      const takenOffline = regStore.markOfflineByProject(id);
-
-      console.log(`✅ Project "${id}" archived`);
-      console.log(`   🔑 Tokens revoked:      ${revokedTokens}`);
-      console.log(`   📡 Registrations offline: ${takenOffline}`);
-
-      // 4. Hard mode: delete events and registrations
-      if (options.hard) {
-        db.run("DELETE FROM events WHERE project_id = ?", [id]);
-        db.run("DELETE FROM registrations WHERE project_id = ?", [id]);
-        console.log(`   🗑️  Events deleted for project "${id}"`);
-        console.log(`   ⚠️  This is irreversible.`);
+      if (p.status === "active") {
+        console.log(`ℹ️  Project "${id}" is already active.`);
+        return;
       }
+
+      if (!options.force) {
+        console.log(`⚠️  About to unarchive project "${id}" (${p.name}):`);
+        console.log(`   Tokens will be restored, registrations marked online.`);
+        console.log(`   Use --force to skip this prompt.`);
+        return;
+      }
+
+      // 1. Unarchive the project
+      const restored = projectStore.unarchive(id);
+      if (!restored) {
+        console.error(`❌ Failed to unarchive "${id}"`);
+        process.exit(1);
+      }
+
+      // 2. Restore tokens
+      const tokenStore = new TokenStore(db);
+      const restoredTokens = tokenStore.restoreByProject(id);
+
+      // 3. Mark registrations online
+      const regStore = new RegistrationStore(db);
+      const onlineRegs = regStore.markOnlineByProject(id);
+
+      console.log(`✅ Project "${id}" unarchived and restored`);
+      console.log(`   🔑 Tokens restored:     ${restoredTokens}`);
+      console.log(`   📡 Registrations online:  ${onlineRegs}`);
     });
 
   project
@@ -103,6 +207,10 @@ export function registerProjectCommands(program: Command): void {
         "SELECT COUNT(*) as c FROM tokens WHERE project_id = ? AND status = 'active'",
         [id]
       );
+      const linkCount = db.exec<{ c: number }>(
+        "SELECT COUNT(*) as c FROM file_links WHERE project_id = ?",
+        [id]
+      );
 
       console.log(`  ID:          ${p.id}`);
       console.log(`  Name:        ${p.name}`);
@@ -111,6 +219,7 @@ export function registerProjectCommands(program: Command): void {
       console.log(`  Registrations: ${regCount[0]?.c ?? 0}`);
       console.log(`  Events:      ${eventCount[0]?.c ?? 0}`);
       console.log(`  Active tokens: ${tokenCount[0]?.c ?? 0}`);
+      console.log(`  File links:  ${linkCount[0]?.c ?? 0}`);
       console.log(`  Created:     ${p.created_at}`);
       console.log(`  Updated:     ${p.updated_at}`);
     });

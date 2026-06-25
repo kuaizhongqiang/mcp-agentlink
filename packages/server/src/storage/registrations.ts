@@ -92,6 +92,16 @@ export class RegistrationStore {
     return result[0]?.count ?? 0;
   }
 
+  markOnlineByProject(projectId: string): number {
+    const result = this.db.exec<{ count: number }>(
+      `UPDATE registrations SET status = 'online', last_seen = datetime('now')
+       WHERE project_id = ? AND status = 'offline'
+       RETURNING COUNT(*) as count`,
+      [projectId]
+    );
+    return result[0]?.count ?? 0;
+  }
+
   markOffline(timeoutSeconds: number = 3600): number {
     const result = this.db.exec<{ count: number }>(
       `UPDATE registrations SET status = 'offline'

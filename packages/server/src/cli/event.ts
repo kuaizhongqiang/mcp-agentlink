@@ -71,32 +71,70 @@ export function registerEventCommands(program: Command): void {
     });
 
   event
+    .command("stats")
+    .description("Show event statistics for a project")
+    .requiredOption("--project <id>", "Project ID")
+    .action(async (options: { project: string }) => {
+      const db = await getApp();
+      const store = new EventStore(db);
+      const stats = store.getStats(options.project);
+
+      console.log(`📊 Event Statistics for "${options.project}"`);
+      console.log(`   Total events:  ${stats.total}`);
+      console.log("");
+      console.log(`   By type:`);
+      for (const [type, count] of Object.entries(stats.byType)) {
+        console.log(`     ${type.padEnd(12)} ${count}`);
+      }
+      console.log("");
+      console.log(`   By scope:`);
+      for (const [scope, count] of Object.entries(stats.byScope)) {
+        console.log(`     ${scope.padEnd(12)} ${count}`);
+      }
+      console.log("");
+      console.log(`   Monthly (last 12):`);
+      for (const m of stats.monthly) {
+        console.log(`     ${m.month.padEnd(10)} ${m.count}`);
+      }
+    });
+
+  event
     .command("purge")
-    .description("Delete events for a project, optionally before a date")
+    .description("Delete events for a project")
     .requiredOption("--project <id>", "Project ID")
     .option(
       "--before <date>",
       "Delete events before this date (ISO format, e.g. 2026-01-01)"
     )
     .option("--type <type>", "Delete only events of this type")
+    .option("--all", "Purge ALL events for the project (ignores --before and --type)")
+    .option("--dry-run", "Show what would be deleted without executing")
+    .option("--force", "Skip confirmation prompt")
     .action(
       async (options: {
         project: string;
         before?: string;
         type?: string;
+        all?: boolean;
+        dryRun?: boolean;
+        force?: boolean;
       }) => {
         const db = await getApp();
 
         const conditions: string[] = ["project_id = ?"];
         const bindings: SqlValue[] = [options.project];
 
-        if (options.before) {
-          conditions.push("timestamp < ?");
-          bindings.push(options.before);
-        }
-        if (options.type) {
-          conditions.push("type = ?");
-          bindings.push(options.type);
+        if (options.all) {
+          // Purge all — no additional filters
+        } else {
+          if (options.before) {
+            conditions.push("timestamp < ?");
+            bindings.push(options.before);
+          }
+          if (options.type) {
+            conditions.push("type = ?");
+            bindings.push(options.type);
+          }
         }
 
         // Count first
@@ -111,15 +149,28 @@ export function registerEventCommands(program: Command): void {
           return;
         }
 
-        // Ask for confirmation (double-check)
-        const filters = [
-          options.before ? `before ${options.before}` : "",
-          options.type ? `type=${options.type}` : "",
-        ]
-          .filter(Boolean)
-          .join(", ");
-        console.log(`   ${count} events will be deleted${filters ? ` (${filters})` : ""}`);
-        console.log("   Deleting...");
+        const filters = options.all
+          ? "ALL events"
+          : [
+              options.before ? `before ${options.before}` : "",
+              options.type ? `type=${options.type}` : "",
+            ]
+              .filter(Boolean)
+              .join(", ");
+
+        // Dry-run: show count and exit
+        if (options.dryRun) {
+          console.log(`📋 Dry-run: ${count} events would be deleted from "${options.project}"${filters ? ` (${filters})` : ""}`);
+          console.log(`   Add --force to execute.`);
+          return;
+        }
+
+        // Confirmation prompt (skip with --force)
+        if (!options.force) {
+          console.log(`⚠️  About to delete ${count} events from "${options.project}"${filters ? ` (${filters})` : ""}`);
+          console.log(`   Use --force to confirm.`);
+          return;
+        }
 
         db.run(
           `DELETE FROM events WHERE ${conditions.join(" AND ")}`,

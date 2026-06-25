@@ -36,6 +36,8 @@ export async function migrate(db: Database): Promise<string[]> {
   const modules: MigrationModule[] = [
     await import("./migrations/001_initial.js"),
     await import("./migrations/002_file_links.js"),
+    await import("./migrations/003_token_permissions.js"),
+    await import("./migrations/004_performance_indexes.js"),
   ];
 
   const executed: string[] = [];

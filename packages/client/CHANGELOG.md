@@ -1,5 +1,11 @@
 # Changelog — mcp-agentlink-client
 
+## [0.4.0] - 2026-06-25
+
+### Changed
+
+- Version bumped to 0.4.0 (sync with server v0.4.0 auth/permission model)
+
 ## [0.3.0] - 2026-06-25
 
 ### Changed
