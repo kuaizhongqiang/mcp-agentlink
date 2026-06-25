@@ -6,7 +6,8 @@ import type { Database } from "../storage/database.js";
 import { RegistrationStore } from "../storage/registrations.js";
 import { EventStore } from "../storage/events.js";
 import { FileLinkStore } from "../storage/fileLinks.js";
-import { verifyToken, assertProjectAccess } from "../auth/index.js";
+import { verifyToken, assertProjectAccess, assertPermission } from "../auth/index.js";
+import type { Permission } from "../storage/tokens.js";
 import { getServerStatus } from "./handlers.js";
 
 // ── Tool definitions (JSON Schema for MCP discovery) ───
@@ -172,6 +173,7 @@ export async function handleRegister(
 
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "write");
     assertProjectAccess(user, project);
 
     const store = new RegistrationStore(ctx.db);
@@ -183,8 +185,13 @@ export async function handleRegister(
     return successResponse({ registrationId: reg.id, status: reg.status });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE") {
-      return errorResponse(msg, msg === "INVALID_TOKEN" ? "Invalid or revoked token" : "Token not authorized for this project");
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        UNAUTHORIZED_SCOPE: "Token not authorized for this project",
+        PERMISSION_DENIED: "Token lacks required permission",
+      };
+      return errorResponse(msg, map[msg]);
     }
     return errorResponse("VALIDATION_ERROR", msg);
   }
@@ -206,6 +213,7 @@ export async function handlePostEvent(
 
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "write");
 
     const sender = getOptional(params, "sender") ?? user.role;
     const scope = getOptional(params, "scope") ?? "*";
@@ -217,8 +225,13 @@ export async function handlePostEvent(
     return successResponse({ eventId: ev.id });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE") {
-      return errorResponse(msg, msg === "INVALID_TOKEN" ? "Invalid or revoked token" : "Token not authorized for this project");
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        UNAUTHORIZED_SCOPE: "Token not authorized for this project",
+        PERMISSION_DENIED: "Token lacks required permission",
+      };
+      return errorResponse(msg, map[msg]);
     }
     return errorResponse("VALIDATION_ERROR", msg);
   }
@@ -235,6 +248,7 @@ export async function handleQueryEvents(
 
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "read");
 
     const store = new EventStore(ctx.db);
     const events = store.query({
@@ -247,8 +261,13 @@ export async function handleQueryEvents(
     return successResponse({ events });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE") {
-      return errorResponse(msg, msg === "INVALID_TOKEN" ? "Invalid or revoked token" : "Token not authorized for this project");
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        UNAUTHORIZED_SCOPE: "Token not authorized for this project",
+        PERMISSION_DENIED: "Token lacks required permission",
+      };
+      return errorResponse(msg, map[msg]);
     }
     return errorResponse("VALIDATION_ERROR", msg);
   }
@@ -263,6 +282,7 @@ export async function handleStatus(
     const token = getRequired(params, "token");
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "read");
 
     const status = getServerStatus(ctx.db);
     return successResponse({
@@ -288,6 +308,7 @@ export async function handleLinkFile(
     const token = getRequired(params, "token");
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "write");
     assertProjectAccess(user, project);
 
     const store = new FileLinkStore(ctx.db);
@@ -302,8 +323,14 @@ export async function handleLinkFile(
     return successResponse({ linkId: link.id });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE")
-      return errorResponse(msg, msg === "INVALID_TOKEN" ? "Invalid or revoked token" : "Unauthorized");
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        UNAUTHORIZED_SCOPE: "Token not authorized for this project",
+        PERMISSION_DENIED: "Token lacks required permission",
+      };
+      return errorResponse(msg, map[msg]);
+    }
     return errorResponse("VALIDATION_ERROR", msg);
   }
 }
@@ -320,13 +347,22 @@ export async function handleQueryLinks(
     const token = getRequired(params, "token");
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "read");
 
     const store = new FileLinkStore(ctx.db);
     const sourceMatches = store.findBySource(project, repo, path);
     const targetMatches = store.findByTarget(project, repo, path);
     return successResponse({ links: [...sourceMatches, ...targetMatches] });
   } catch (err) {
-    return errorResponse("VALIDATION_ERROR", (err as Error).message);
+    const msg = (err as Error).message;
+    if (msg === "INVALID_TOKEN" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        PERMISSION_DENIED: "Token lacks required permission",
+      };
+      return errorResponse(msg, map[msg]);
+    }
+    return errorResponse("VALIDATION_ERROR", msg);
   }
 }
 
@@ -340,6 +376,7 @@ export async function handleUnlinkFile(
     const token = getRequired(params, "token");
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPermission(user, "write");
 
     const store = new FileLinkStore(ctx.db);
     const deleted = store.delete(linkId);

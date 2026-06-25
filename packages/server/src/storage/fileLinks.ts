@@ -77,4 +77,12 @@ export class FileLinkStore {
     );
     return rows.length > 0;
   }
+
+  deleteByProject(projectId: string): number {
+    const result = this.db.exec<{ count: number }>(
+      "DELETE FROM file_links WHERE project_id = ? RETURNING COUNT(*) as count",
+      [projectId]
+    );
+    return result[0]?.count ?? 0;
+  }
 }

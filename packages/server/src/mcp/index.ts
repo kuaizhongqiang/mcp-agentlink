@@ -20,6 +20,7 @@ import { verifyToken } from "../auth/index.js";
 import { RegistrationStore } from "../storage/registrations.js";
 import { EventStore } from "../storage/events.js";
 import { ProjectStore } from "../storage/projects.js";
+import { getServerStatus, setVersion } from "./handlers.js";
 import {
   toolDefinitions,
   handleRegister,
@@ -50,6 +51,16 @@ export async function startServer(port: number = 3000): Promise<void> {
   const db = await getApp();
   const app = express();
 
+  // Read version from package.json (single source of truth)
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(
+    readFileSync(join(__dirname, "../../package.json"), "utf-8")
+  );
+  setVersion(pkg.version);
+
   // Parse JSON bodies for POST /message
   app.use(express.json());
 
@@ -65,7 +76,7 @@ export async function startServer(port: number = 3000): Promise<void> {
     const server = new Server(
       {
         name: "mcp-agentlink-server",
-        version: "0.3.0",
+        version: pkg.version,
       },
       {
         capabilities: {
@@ -132,9 +143,19 @@ export async function startServer(port: number = 3000): Promise<void> {
     await transport.handlePostMessage(req, res);
   });
 
-  // Health check
+  // Health check with metrics
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", sessionCount: state?.transports.size ?? 0 });
+    const health = getServerStatus(db);
+    res.json({
+      status: "ok",
+      version: health.version,
+      uptime: health.uptime,
+      sessionCount: state?.transports.size ?? 0,
+      projects: health.projects,
+      registrations: `${health.registrationsOnline}/${health.registrations} online`,
+      events: health.events,
+      tokensActive: health.tokensActive,
+    });
   });
 
   // ── REST API for agent self-service ─────────────────────────

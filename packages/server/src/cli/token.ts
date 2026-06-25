@@ -4,7 +4,7 @@
 
 import type { Command } from "commander";
 import { getApp } from "../app/index.js";
-import { TokenStore } from "../storage/tokens.js";
+import { TokenStore, type Permission } from "../storage/tokens.js";
 
 export function registerTokenCommands(program: Command): void {
   const token = program.command("token").description("Manage access tokens");
@@ -14,20 +14,39 @@ export function registerTokenCommands(program: Command): void {
     .description("Generate a new token for a project and role")
     .requiredOption("--project <id>", "Project ID")
     .requiredOption("--role <role>", "Role name (kebab-case)")
-    .action(async (options: { project: string; role: string }) => {
-      const db = await getApp();
-      const store = new TokenStore(db);
-      const { token: raw, tokenData } = store.generate(
-        options.project,
-        options.role
-      );
-      console.log(`✅ Token generated:`);
-      console.log(`  Token:       ${raw}`);
-      console.log(`  ID:          ${tokenData.id}`);
-      console.log(`  Role:        ${tokenData.role}`);
-      console.log(`  Status:      ${tokenData.status}`);
-      console.log(`  ⚠️  This is the only time the raw token is shown.`);
-    });
+    .option(
+      "--perms <level>",
+      "Permission level: read, write (default), or admin",
+      "write"
+    )
+    .action(
+      async (options: {
+        project: string;
+        role: string;
+        perms: string;
+      }) => {
+        const permission = options.perms as Permission;
+        if (!["read", "write", "admin"].includes(permission)) {
+          console.error("❌ Invalid permission level. Use: read, write, admin");
+          process.exit(1);
+        }
+
+        const db = await getApp();
+        const store = new TokenStore(db);
+        const { token: raw, tokenData } = store.generate(
+          options.project,
+          options.role,
+          permission
+        );
+        console.log(`✅ Token generated:`);
+        console.log(`  Token:       ${raw}`);
+        console.log(`  ID:          ${tokenData.id}`);
+        console.log(`  Role:        ${tokenData.role}`);
+        console.log(`  Permissions: ${tokenData.permissions}`);
+        console.log(`  Status:      ${tokenData.status}`);
+        console.log(`  ⚠️  This is the only time the raw token is shown.`);
+      }
+    );
 
   token
     .command("revoke <token>")
@@ -58,7 +77,7 @@ export function registerTokenCommands(program: Command): void {
       for (const t of tokens) {
         const icon = t.status === "active" ? "🟢" : "🔴";
         console.log(
-          `  ${icon} ${t.id.padEnd(36)} ${t.role.padEnd(20)} ${t.status}`
+          `  ${icon} ${t.id.substring(0, 8).padEnd(10)} ${t.role.padEnd(20)} ${(t.permissions ?? "write").padEnd(8)} ${t.status}`
         );
       }
     });

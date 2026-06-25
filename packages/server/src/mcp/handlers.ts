@@ -1,5 +1,6 @@
 /**
  * Aggregated server status — project stats, registration count, event count.
+ * Version is set dynamically from package.json by the CLI on startup.
  */
 
 import type { Database } from "../storage/database.js";
@@ -14,6 +15,15 @@ export interface ServerStatus {
   tokensActive: number;
 }
 
+let _version = "0.0.0"; // Fallback until setVersion() is called
+
+/**
+ * Set the version string (called by CLI on startup from package.json).
+ */
+export function setVersion(v: string): void {
+  _version = v;
+}
+
 export function getServerStatus(db: Database): ServerStatus {
   const projectCount = db.exec<{ c: number }>("SELECT COUNT(*) as c FROM projects");
   const regCount = db.exec<{ c: number }>("SELECT COUNT(*) as c FROM registrations");
@@ -26,7 +36,7 @@ export function getServerStatus(db: Database): ServerStatus {
   );
 
   return {
-    version: "0.3.0",
+    version: _version,
     uptime: new Date().toISOString(),
     projects: projectCount[0]?.c ?? 0,
     registrations: regCount[0]?.c ?? 0,

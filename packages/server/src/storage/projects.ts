@@ -54,4 +54,13 @@ export class ProjectStore {
     );
     return projects[0];
   }
+
+  unarchive(id: string): Project | undefined {
+    const projects = this.db.exec<Project>(
+      `UPDATE projects SET status = 'active', updated_at = datetime('now')
+       WHERE id = ? AND status = 'archived' RETURNING *`,
+      [id]
+    );
+    return projects[0];
+  }
 }
