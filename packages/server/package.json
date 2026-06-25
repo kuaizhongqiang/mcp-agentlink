@@ -1,6 +1,6 @@
 {
   "name": "mcp-agentlink-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "bin": {
     "mcp-agentlink": "./dist/cli/index.js"

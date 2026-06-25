@@ -1,5 +1,12 @@
 # Changelog — mcp-agentlink-client
 
+## [0.3.0] - 2026-06-25
+
+### Changed
+
+- Updated `skill/slash-agentlink.md` to reflect REST API based `/agentlink` implementation (uses `GET /api/agent/status` and `POST /api/agent/register` instead of MCP tool calls)
+- Version bumped to 0.3.0
+
 ## [0.2.0] - 2026-06-24
 
 ### Added
