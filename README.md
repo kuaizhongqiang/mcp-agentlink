@@ -30,8 +30,8 @@
 
 |Package|Version|Description|
 |---|---|-------------|
-|[mcp-agentlink-server](./packages/server/)|v0.1.0|Center server: CLI, SQLite storage, MCP over SSE, auth|
-|[mcp-agentlink-client](./packages/client/)|v0.1.0|Client library: agent init, skill rules, MCP proxy|
+|[mcp-agentlink-server](./packages/server/)|v0.3.0|Center server: CLI, SQLite storage, MCP over SSE, auth, REST API|
+|[mcp-agentlink-client](./packages/client/)|v0.3.0|Client library: agent init, skill rules, MCP proxy, slash command|
 
 ## Quick Start
 
@@ -70,7 +70,7 @@ See [packages/client/skill/skill.md](./packages/client/skill/skill.md) for agent
 
 ## Status
 
-**Phase 1 (MVP):** ✅ done | **Phase 2 (v0.2.0):** ✅ done
+**Phase 1 (MVP):** ✅ done | **Phase 2 (v0.3.0):** ✅ done
 
 Phase 2 additions:
 - ✅ `/agentlink` slash command & `status` tool
@@ -78,6 +78,8 @@ Phase 2 additions:
 - ✅ Project archive cascade (tokens + registrations + hard cleanup)
 - ✅ Error handling (`withRetry()` backoff utility)
 - ✅ Event purge CLI (`--project --before --type`)
+- ✅ REST API for agent self-service (`GET /api/agent/status`, `POST /api/agent/register`)
+- ✅ GitHub issue & PR templates
 
 ## License
 

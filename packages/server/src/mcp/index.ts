@@ -16,6 +16,10 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { getApp, closeApp } from "../app/index.js";
 import { withRetry } from "../app/retry.js";
+import { verifyToken } from "../auth/index.js";
+import { RegistrationStore } from "../storage/registrations.js";
+import { EventStore } from "../storage/events.js";
+import { ProjectStore } from "../storage/projects.js";
 import {
   toolDefinitions,
   handleRegister,
@@ -61,7 +65,7 @@ export async function startServer(port: number = 3000): Promise<void> {
     const server = new Server(
       {
         name: "mcp-agentlink-server",
-        version: "0.2.0",
+        version: "0.3.0",
       },
       {
         capabilities: {
@@ -131,6 +135,95 @@ export async function startServer(port: number = 3000): Promise<void> {
   // Health check
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", sessionCount: state?.transports.size ?? 0 });
+  });
+
+  // ── REST API for agent self-service ─────────────────────────
+
+  /**
+   * GET /api/agent/status?token=xxx
+   *
+   * Returns the agent's connection status: project info, registration,
+   * event counts, and server health. Used by the /agentlink skill.
+   */
+  app.get("/api/agent/status", (req, res) => {
+    const token = req.query.token as string | undefined;
+    if (!token) {
+      res.status(401).json({ error: "Missing token" });
+      return;
+    }
+    const user = verifyToken(db, token);
+    if (!user) {
+      res.status(401).json({ error: "Invalid or revoked token" });
+      return;
+    }
+
+    const projectStore = new ProjectStore(db);
+    const project = projectStore.findById(user.projectId);
+
+    const eventStore = new EventStore(db);
+    const allEvents = eventStore.query({ project: user.projectId });
+    const scopedEvents = eventStore.query({ project: user.projectId, scope: user.role });
+
+    const regStore = new RegistrationStore(db);
+    const myRegs = regStore
+      .list(user.projectId)
+      .filter((r) => r.role === user.role);
+
+    res.json({
+      agent: { projectId: user.projectId, role: user.role },
+      project: project
+        ? { id: project.id, name: project.name, status: project.status }
+        : null,
+      events: {
+        total: allEvents.length,
+        scoped: scopedEvents.length,
+      },
+      registrations: myRegs.map((r) => ({
+        sender: r.sender,
+        status: r.status,
+        lastSeen: r.last_seen,
+      })),
+      server: {
+        sessionCount: state?.transports.size ?? 0,
+      },
+    });
+  });
+
+  /**
+   * POST /api/agent/register
+   *
+   * Register or re-register an agent via REST. Alternative to the MCP
+   * register tool for agents that don't have a full MCP connection.
+   */
+  app.post("/api/agent/register", (req, res) => {
+    const { project, sender, role, workpath, giturl, token } = req.body ?? {};
+    if (!project || !sender || !role || !workpath || !giturl || !token) {
+      res.status(400).json({ error: "Missing required fields" });
+      return;
+    }
+
+    const user = verifyToken(db, token);
+    if (!user) {
+      res.status(401).json({ error: "Invalid or revoked token" });
+      return;
+    }
+    if (user.projectId !== project) {
+      res.status(403).json({ error: "Token not authorized for this project" });
+      return;
+    }
+
+    const store = new RegistrationStore(db);
+    const reg = store.register({ project, sender, role, workpath, giturl });
+
+    if (!reg) {
+      res.status(409).json({ error: "Sender already registered by a different agent" });
+      return;
+    }
+
+    res.json({
+      registrationId: reg.id,
+      status: reg.status,
+    });
   });
 
   return new Promise<void>((resolve) => {

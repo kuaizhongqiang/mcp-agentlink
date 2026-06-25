@@ -26,7 +26,7 @@ export function getServerStatus(db: Database): ServerStatus {
   );
 
   return {
-    version: "0.2.0",
+    version: "0.3.0",
     uptime: new Date().toISOString(),
     projects: projectCount[0]?.c ?? 0,
     registrations: regCount[0]?.c ?? 0,

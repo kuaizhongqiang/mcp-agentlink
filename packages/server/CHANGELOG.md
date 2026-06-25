@@ -1,5 +1,17 @@
 # Changelog — mcp-agentlink-server
 
+## [0.3.0] - 2026-06-25
+
+### Added
+
+- REST API for agent self-service: `GET /api/agent/status` (agent connection status with event counts) and `POST /api/agent/register` (REST alternative to MCP register tool)
+- `.github/` issue and PR templates for standardized workflow
+- `.claude/skills/agentlink.md`: `/agentlink` slash command skill (status, on, off, reconnect)
+
+### Changed
+
+- Version bumped to 0.3.0
+
 ## [0.2.0] - 2026-06-24
 
 ### Added
