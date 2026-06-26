@@ -1,5 +1,11 @@
 # Changelog — mcp-agentlink-client
 
+## [0.5.1] - 2026-06-26
+
+### Updated
+
+- Documentation: README.md updated to reflect Phase 4 storage layout and all 9 MCP tools
+
 ## [0.5.0] - 2026-06-26
 
 ### Added
