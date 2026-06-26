@@ -7,11 +7,13 @@
 
 ## 1. On Startup
 
-If `enabled: true` is found in workspace config (CLAUDE.md / CODEBUDDY.md):
+If `enabled: true` in `.mcp-agentlink/identity.json` or workspace config:
 
-1. Read the config block (`## mcp-agentlink Config`)
-2. Call `register` MCP tool → center confirms agent identity
-3. Call `queryEvents` with `scope` set to own role → pull pending events
+1. **Read identity** from `.mcp-agentlink/identity.json` (new format) or config block in CLAUDE.md (legacy)
+2. **Read token** from `.mcp-agentlink/token` (new format) or `.mcp-agentlink.token` (legacy)
+3. Call `register` MCP tool → center confirms agent identity
+4. Call `queryEvents` with `scope` set to own role → pull pending events
+5. **Suggest** running `/agentlink sync` to fetch the latest charter
 
 If `enabled: false` or no config found → skip, do nothing.
 
@@ -44,25 +46,38 @@ Periodically (before starting a new task, or on user prompting):
 2. For each new event:
    - Read the `summary` — if relevant, read the `docRef.path` for full context
    - Decide whether to act on it or acknowledge
+3. If a new `milestone` or `start` event is found → execute `/agentlink sync`
 
 ---
 
-## Config Reference
+## 4. PM Role
 
-Expected workspace config format:
+If your agent is registered with `role: pm`:
 
-```markdown
-## mcp-agentlink Config
-enabled: true
-project: <project-id>
-role: api-owner
-sender: <repo>/<agent-id>
-workpath: /absolute/path/to/repo
-giturl: https://github.com/user/repo
-server_url: https://mcp-agentlink.example.com
+- You can call `publishCharter` to update the project's charter
+- You can call `project close` (via CLI) to close the project
+- You are responsible for drafting the project's Charter (5-layer framework)
+
+---
+
+## Storage Reference
+
+Two-layer structure:
+
 ```
+# Global (shared across all projects)
+~/.mcp-agentlink/
+├── client-config.json         # defaultServerUrl, project list
+└── cache/{project-id}/
+    ├── charter.yaml           # Cached project charter
+    └── sync-meta.json         # Last sync metadata
 
-Token is stored separately in `.mcp-agentlink.token` (never in workspace file).
+# Project-level (one per repo)
+{repo-root}/.mcp-agentlink/
+├── identity.json              # project, role, sender, server_url
+├── token                      # Auth token (in .gitignore)
+└── .gitignore                 # Ignores token file
+```
 
 ---
 
@@ -73,3 +88,9 @@ Token is stored separately in `.mcp-agentlink.token` (never in workspace file).
 | `register` | Register agent identity | On startup |
 | `postEvent` | Post completion/status event | After long tasks |
 | `queryEvents` | Pull events by scope/type | Periodically during work |
+| `status` | Get server + agent status | Connection diagnostics |
+| `linkFile` | Create cross-repo file link | When files span repos |
+| `queryLinks` | Query file links | When looking up file associations |
+| `unlinkFile` | Delete a file link | Cleanup |
+| `publishCharter` | Publish project charter | PM only — when charter changes |
+| `syncCharter` | Fetch latest charter | During sync workflow |

@@ -14,6 +14,7 @@ Manage your agent's connection to the mcp-agentlink server.
 /agentlink on              Enable the connection and register
 /agentlink off             Disable the connection (no auto-register)
 /agentlink reconnect       Full re-registration + catch up on events
+/agentlink sync            Fetch latest charter from server (overwrites local cache)
 ```
 
 ---
@@ -150,6 +151,44 @@ Full reconnection flow: verify server, re-register, catch up on missed events.
    Server:     🟢 online
    Project:    payment-rebuild
    New events: 3 (since cursor abc-123)
+   ```
+
+---
+
+## /agentlink sync
+
+Fetch the latest charter from the server and update the local cache.
+
+### Steps
+
+1. **Read identity + token**
+   - Read `.mcp-agentlink/identity.json` for project, server_url
+   - Read `.mcp-agentlink/token` for the auth token
+
+2. **Call server sync API**
+   - `POST {server_url}/api/agent/sync` with JSON body:
+
+     ```json
+     { "project": "...", "token": "..." }
+     ```
+
+   - Returns `{ charter: { content, guid, published_at }, project: { id, status } }`
+
+3. **Write to local cache**
+   - Write charter content to `~/.mcp-agentlink/cache/{project-id}/charter.yaml`
+   - Write sync metadata to `~/.mcp-agentlink/cache/{project-id}/sync-meta.json`
+
+4. **Display summary**
+   ```
+   🔄 Charter synced for "my-project"
+      GUID:      abc-123-def
+      Published: 2026-06-25 10:00:00
+      Status:    active
+   ```
+
+5. **If no charter published yet**
+   ```
+   ℹ️  No charter published yet for "my-project"
    ```
 
 ---
