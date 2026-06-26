@@ -30,23 +30,25 @@ npm install mcp-agentlink-client
 
 ### 2. Read Skill Rules
 
-Read `./skill/skill.md` — it defines 3 automatic behaviors:
-- **On startup**: auto-register + query events for your scope
+Read `./skill/skill.md` — it defines automatic behaviors:
+- **On startup**: auto-register + query events for your scope; suggest running `/agentlink sync`
 - **On task completion**: post event + alert user for cross-role notifications
-- **During work**: periodically query new events
+- **During work**: periodically query new events; sync on milestone events
+- **PM role**: if registered as `pm`, can publish charter via `publishCharter`
 
 ### 3. Init (First Time)
 
 The agent runs a Q&A flow with the user to collect:
 - Project, role, sender, workpath, giturl, server_url, token
 
-Then calls the `init()` function to write config to the workspace file
-and token to `.mcp-agentlink.token` (in `.gitignore`).
+Then calls the `init()` function to write identity to `.mcp-agentlink/identity.json`
+and token to `.mcp-agentlink/token` (auto-created `.gitignore`).
 
 ### 4. Connect
 
-Use the MCP tools (`register`, `postEvent`, `queryEvents`) via the
-MCP protocol against the center's SSE endpoint.
+Use the MCP tools (`register`, `postEvent`, `queryEvents`, `status`,
+`linkFile`, `queryLinks`, `unlinkFile`, `publishCharter`, `syncCharter`)
+via the MCP protocol against the center's SSE endpoint.
 
 ## Package Contents
 
@@ -56,7 +58,8 @@ node_modules/mcp-agentlink-client/
 ├── skill/
 │   └── skill.md       ← Agent behavior rules (auto-read)
 ├── dist/
-│   └── index.js       ← init() / readToken() / readConfig()
+│   ├── index.js       ← init() / readToken() / readConfig() / sync()
+│   └── format.js      ← formatTable() / formatJson() / paginate()
 └── package.json
 ```
 

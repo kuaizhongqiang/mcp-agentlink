@@ -30,8 +30,8 @@
 
 |Package|Version|Description|
 |---|---|-------------|
-|[mcp-agentlink-server](./packages/server/)|v0.3.0|Center server: CLI, SQLite storage, MCP over SSE, auth, REST API|
-|[mcp-agentlink-client](./packages/client/)|v0.3.0|Client library: agent init, skill rules, MCP proxy, slash command|
+|[mcp-agentlink-server](./packages/server/)|v0.5.0|Center server: CLI, SQLite storage, MCP over SSE, auth, REST API, Charter system|
+|[mcp-agentlink-client](./packages/client/)|v0.5.0|Client library: agent init, skill rules, MCP proxy, slash command, local cache|
 
 ## Quick Start
 
@@ -55,7 +55,11 @@ Agents install the client package, run `init` via Q&A to configure, then use the
 
 - `register` — Register agent identity with the center
 - `postEvent` — Post completion or status events
-- `queryEvents` — Pull events by scope/type
+- `queryEvents` — Pull events by scope/type, cursor-based
+- `status` — Get server + agent connection status
+- `linkFile` / `queryLinks` / `unlinkFile` — Cross-repo file linking
+- `publishCharter` — Publish project charter (PM only)
+- `syncCharter` — Fetch latest charter and project status
 
 See [packages/client/skill/skill.md](./packages/client/skill/skill.md) for agent behavior rules.
 
@@ -70,16 +74,23 @@ See [packages/client/skill/skill.md](./packages/client/skill/skill.md) for agent
 
 ## Status
 
-**Phase 1 (MVP):** ✅ done | **Phase 2 (v0.3.0):** ✅ done
+**v0.5.0** — All 4 phases complete.
 
-Phase 2 additions:
-- ✅ `/agentlink` slash command & `status` tool
-- ✅ File linking (cross-repo file mapping + MCP tools)
-- ✅ Project archive cascade (tokens + registrations + hard cleanup)
-- ✅ Error handling (`withRetry()` backoff utility)
-- ✅ Event purge CLI (`--project --before --type`)
-- ✅ REST API for agent self-service (`GET /api/agent/status`, `POST /api/agent/register`)
-- ✅ GitHub issue & PR templates
+| Phase | Version | Status |
+|-------|---------|--------|
+| Phase 1 — MVP | v0.1.0 | ✅ |
+| Phase 2 — Integration | v0.2.0→v0.3.0 | ✅ |
+| Phase 3 — Refinement | v0.4.0 | ✅ |
+| Phase 4 — Collaborative Governance | **v0.5.0** | ✅ |
+
+**Phase 4 highlights:**
+- ✅ PM role mechanism (`register --role pm`, `project close`)
+- ✅ Charter system (5-layer framework, `publishCharter`/`syncCharter`)
+- ✅ Two-layer local storage (`~/.mcp-agentlink/` + `.mcp-agentlink/`)
+- ✅ Client sync (`/agentlink sync`, `POST /api/agent/sync`)
+- ✅ CLI formatting utilities (table, JSON, pagination)
+- ✅ Skill formalization (auto-generated `.claude/skills/agentlink.md`)
+- ✅ Sender auto-generation (`{repo}/{agent}` format)
 
 ## License
 
