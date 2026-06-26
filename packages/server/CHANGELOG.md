@@ -1,25 +1,25 @@
 # Changelog — mcp-agentlink-server
 
-## [0.4.0] - 2026-06-25
+## [0.5.0] - 2026-06-26
 
 ### Added
 
-- **Project unarchive**: `mcp-agentlink project unarchive <id>` restores archived projects, re-activates tokens and registrations
-- **Archive safety**: `--dry-run` preview and `--force` skip-confirmation flags on `project archive`
-- **File links cascade**: `--hard` archive mode now deletes associated file_links records
-- **Event purge completion**: `--all` (purge all events), `--dry-run` (preview count), and `--force` (skip prompt) flags
-- **Event statistics**: `mcp-agentlink event stats --project <id>` with breakdown by type, scope, and monthly trend
-- **SQLITE_BUSY retry**: Database `exec()` and `run()` operations auto-retry up to 3 times with exponential backoff
-- **Finer-grained auth**: Tokens now have a `permissions` column (`read`/`write`/`admin`); MCP tools enforce permission checks
-- **Token permissions CLI**: `mcp-agentlink token generate --perms <read|write|admin>`
-- **Dynamic version**: Version string read from `package.json` at startup — no more hardcoded drift
-- **Performance indexes**: Composite indexes for common event/registration/token query patterns (migration 004)
-- **Enhanced health endpoint**: `/health` now returns version, uptime, project/registration/event/token metrics
-- **Performance migration**: 004_performance_indexes.sql with composite indexes
+- **PM role mechanism**: `register --role pm` for project PM registration (idempotent); `project close <id>` sets project to closed status, blocking new events and registrations; new error codes `PM_EXISTS`, `NO_PM`, `PROJECT_CLOSED`
+- **Charter system**: `charters` table with GUID versioning; `publishCharter` MCP tool (PM-only, publishes project constitution); `syncCharter` MCP tool (all agents, returns charter + project status); `POST /api/agent/sync` REST endpoint
+- **CLI commands**: `mcp-agentlink project close <id>` (close projects), `mcp-agentlink charter set --project --file` (publish charter), `mcp-agentlink charter show --project` (view charter)
+- **Migration 005**: Rebuilds projects table with `closed` in status CHECK constraint, creates charters table
 
 ### Changed
 
-- Version bumped to 0.4.0
+- Auth module: added `assertPmRole()`, `assertProjectHasPm()`, `assertProjectNotClosed()` assertion functions
+- RegistrationStore: added `findPm()`, `hasPm()` PM lookup helpers
+- ProjectStore: extended `status` type to `active | archived | closed`, added `close()` and `isClosed()` methods
+- MCP tools: handleRegister enforces PM-first registration flow; handlePostEvent rejects closed projects
+- Version bumped to 0.5.0
+
+### Fixed
+
+- Project list display now shows closed projects with ⏹ icon and status text
 
 ## [0.3.0] - 2026-06-25
 

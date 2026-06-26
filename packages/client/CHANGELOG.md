@@ -1,10 +1,28 @@
 # Changelog — mcp-agentlink-client
 
-## [0.4.0] - 2026-06-25
+## [0.5.0] - 2026-06-26
+
+### Added
+
+- **Two-layer storage**: global `~/.mcp-agentlink/` (config + cache) + project `.mcp-agentlink/` (identity + token)
+- **New init layout**: `init()` writes `.mcp-agentlink/identity.json`, `.mcp-agentlink/token`, and `.gitignore`
+- **Token migration**: token moved from `.mcp-agentlink.token` to `.mcp-agentlink/token`; backward compatible read fallback
+- **Global config**: `readGlobalConfig()` / `writeGlobalConfig()` for shared project registry
+- **Charter cache**: `writeCharterCache()` / `readCharterCache()` / `writeSyncMeta()` / `readSyncMeta()` for local sync persistence
+- **Sync**: `sync(serverUrl, projectId, token)` fetches charter via `POST /api/agent/sync` and writes to local cache
+- **Sync status**: `getSyncStatus(projectId)` reads cached sync state without network call
+- **Skill formalization**: `writeSkillFile()` auto-generates `.claude/skills/agentlink.md` with Phase 4 rules
+- **Sender auto-generation**: `detectRepo()` / `detectAgentName()` / `generateSender()` for `{repo}/{agent}` format
+- **Legacy migration**: `detectLegacyConfig()` / `migrateLegacyConfig()` one-time migration from old format
+- **CLI formatting**: `formatTable()` / `formatJson()` / `paginate()` / `formatConnectionStatus()` utilities
+- **Skill docs**: Updated `skill/skill.md` with Phase 4 storage layout, PM role rules, all 9 MCP tools
+- **Test isolation**: `setGlobalDir()` for overriding global config directory in tests
 
 ### Changed
 
-- Version bumped to 0.4.0 (sync with server v0.4.0 auth/permission model)
+- `readConfig()` now derives root directory from workspace file path for token lookup
+- `readToken()` checks `.mcp-agentlink/token` first, falls back to `.mcp-agentlink.token`
+- Version bumped to 0.5.0
 
 ## [0.3.0] - 2026-06-25
 
