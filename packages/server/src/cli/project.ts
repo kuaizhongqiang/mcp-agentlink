@@ -167,6 +167,44 @@ export function registerProjectCommands(program: Command): void {
     });
 
   project
+    .command("close <id>")
+    .description("Close a project — prevents new events and registrations")
+    .option("--force", "Skip confirmation prompt")
+    .action(async (id: string, options: { force?: boolean }) => {
+      const db = await getApp();
+      const projectStore = new ProjectStore(db);
+
+      const p = projectStore.findById(id);
+      if (!p) {
+        console.error(`❌ Project "${id}" not found`);
+        process.exit(1);
+      }
+      if (p.status === "closed") {
+        console.log(`ℹ️  Project "${id}" is already closed.`);
+        return;
+      }
+      if (p.status !== "active") {
+        console.error(`❌ Project "${id}" is ${p.status}. Only active projects can be closed.`);
+        process.exit(1);
+      }
+
+      if (!options.force) {
+        console.log(`⚠️  About to close project "${id}" (${p.name}):`);
+        console.log(`   This will prevent new events and registrations.`);
+        console.log(`   Use --force to skip this prompt.`);
+        return;
+      }
+
+      const closed = projectStore.close(id);
+      if (!closed) {
+        console.error(`❌ Failed to close project "${id}"`);
+        process.exit(1);
+      }
+
+      console.log(`✅ Project "${id}" closed. No new events will be accepted.`);
+    });
+
+  project
     .command("list")
     .description("List all projects")
     .action(async () => {
@@ -178,8 +216,8 @@ export function registerProjectCommands(program: Command): void {
         return;
       }
       for (const p of projects) {
-        const status = p.status === "active" ? "🟢" : "🔴";
-        console.log(`  ${status} ${p.id.padEnd(20)} ${p.name}`);
+        const statusIcon = p.status === "active" ? "🟢" : p.status === "closed" ? "⏹" : "🔴";
+        console.log(`  ${statusIcon} ${p.id.padEnd(20)} ${p.name.padEnd(30)} ${p.status}`);
       }
     });
 

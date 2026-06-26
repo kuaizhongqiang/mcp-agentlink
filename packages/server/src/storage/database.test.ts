@@ -7,6 +7,8 @@ import { createDatabase, migrate } from "./index.js";
 import { RegistrationStore } from "./registrations.js";
 import { EventStore } from "./events.js";
 import { TokenStore } from "./tokens.js";
+import { ProjectStore } from "./projects.js";
+import { CharterStore } from "./charters.js";
 
 async function setupDb() {
   const db = await createDatabase();
@@ -33,6 +35,41 @@ describe("ProjectStore", () => {
       ["p1"]
     );
     expect(found[0].name).toBe("P1");
+  });
+
+  it("closes an active project", async () => {
+    const db = await setupDb();
+    const store = new ProjectStore(db);
+
+    const closed = store.close("test-1");
+    expect(closed).toBeTruthy();
+    expect(closed!.status).toBe("closed");
+
+    const found = store.findById("test-1");
+    expect(found!.status).toBe("closed");
+  });
+
+  it("isClosed returns true for closed projects", async () => {
+    const db = await setupDb();
+    const store = new ProjectStore(db);
+
+    store.close("test-1");
+    expect(store.isClosed("test-1")).toBe(true);
+  });
+
+  it("isClosed returns false for active projects", async () => {
+    const db = await setupDb();
+    const store = new ProjectStore(db);
+
+    expect(store.isClosed("test-1")).toBe(false);
+  });
+
+  it("cannot close a non-existent project", async () => {
+    const db = await setupDb();
+    const store = new ProjectStore(db);
+
+    const closed = store.close("non-existent");
+    expect(closed).toBeUndefined();
   });
 });
 
@@ -89,6 +126,87 @@ describe("RegistrationStore", () => {
 
     const list = store.list();
     expect(list.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("findPm returns undefined when no PM", async () => {
+    const db = await setupDb();
+    const store = new RegistrationStore(db);
+
+    const pm = store.findPm("test-1");
+    expect(pm).toBeUndefined();
+  });
+
+  it("hasPm returns false when no PM", async () => {
+    const db = await setupDb();
+    const store = new RegistrationStore(db);
+
+    expect(store.hasPm("test-1")).toBe(false);
+  });
+
+  it("findPm returns the PM registration", async () => {
+    const db = await setupDb();
+    const store = new RegistrationStore(db);
+
+    store.register({
+      project: "test-1",
+      sender: "admin/repo",
+      role: "pm",
+      workpath: "/home/admin",
+      giturl: "https://github.com/admin/repo",
+    });
+
+    const pm = store.findPm("test-1");
+    expect(pm).toBeTruthy();
+    expect(pm!.role).toBe("pm");
+    expect(pm!.sender).toBe("admin/repo");
+  });
+
+  it("hasPm returns true when PM registered", async () => {
+    const db = await setupDb();
+    const store = new RegistrationStore(db);
+
+    store.register({
+      project: "test-1",
+      sender: "admin/repo",
+      role: "pm",
+      workpath: "/home/admin",
+      giturl: "https://github.com/admin/repo",
+    });
+
+    expect(store.hasPm("test-1")).toBe(true);
+  });
+});
+
+describe("CharterStore integration", () => {
+  it("publishes and retrieves a charter", async () => {
+    const db = await setupDb();
+    const store = new CharterStore(db);
+
+    const charter = store.publish({
+      project: "test-1",
+      content: "vision: test\nroles:\n  - coder",
+      published_by: "pm",
+    });
+
+    expect(charter.project_id).toBe("test-1");
+    expect(charter.guid).toBeTruthy();
+
+    const fetched = store.getByProject("test-1");
+    expect(fetched).toBeTruthy();
+    expect(fetched!.content).toBe(charter.content);
+    expect(fetched!.guid).toBe(charter.guid);
+  });
+
+  it("upsert updates existing charter", async () => {
+    const db = await setupDb();
+    const store = new CharterStore(db);
+
+    store.publish({ project: "test-1", content: "v1", published_by: "pm" });
+    const updated = store.publish({ project: "test-1", content: "v2", published_by: "pm" });
+
+    expect(updated.content).toBe("v2");
+    const fetched = store.getByProject("test-1");
+    expect(fetched!.content).toBe("v2");
   });
 });
 

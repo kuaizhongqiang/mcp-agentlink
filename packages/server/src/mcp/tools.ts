@@ -6,7 +6,14 @@ import type { Database } from "../storage/database.js";
 import { RegistrationStore } from "../storage/registrations.js";
 import { EventStore } from "../storage/events.js";
 import { FileLinkStore } from "../storage/fileLinks.js";
-import { verifyToken, assertProjectAccess, assertPermission } from "../auth/index.js";
+import { CharterStore } from "../storage/charters.js";
+import {
+  verifyToken,
+  assertProjectAccess,
+  assertPermission,
+  assertPmRole,
+  assertProjectNotClosed,
+} from "../auth/index.js";
 import type { Permission } from "../storage/tokens.js";
 import { getServerStatus } from "./handlers.js";
 
@@ -125,6 +132,31 @@ export const toolDefinitions = [
       required: ["linkId", "token"],
     },
   },
+  {
+    name: "publishCharter",
+    description: "Publish project charter (PM only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project ID" },
+        content: { type: "string", description: "Charter content (YAML/text format)" },
+        token: { type: "string", description: "PM authentication token" },
+      },
+      required: ["project", "content", "token"],
+    },
+  },
+  {
+    name: "syncCharter",
+    description: "Fetch latest charter for a project",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project ID" },
+        token: { type: "string", description: "Authentication token" },
+      },
+      required: ["project", "token"],
+    },
+  },
 ];
 
 // ── Tool handlers ──────────────────────────────────────
@@ -175,8 +207,23 @@ export async function handleRegister(
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
     assertPermission(user, "write");
     assertProjectAccess(user, project);
+    assertProjectNotClosed(ctx.db, project);
 
     const store = new RegistrationStore(ctx.db);
+
+    // PM registration logic
+    if (role === "pm") {
+      const existingPm = store.findPm(project);
+      if (existingPm && existingPm.sender !== sender) {
+        return errorResponse("PM_EXISTS", "Project already has a PM");
+      }
+    } else {
+      // Non-PM roles: project must have a PM first
+      if (!store.hasPm(project)) {
+        return errorResponse("NO_PM", "Project has no PM — register a PM first");
+      }
+    }
+
     const reg = store.register({ project, sender, role, workpath, giturl });
 
     if (!reg)
@@ -185,11 +232,12 @@ export async function handleRegister(
     return successResponse({ registrationId: reg.id, status: reg.status });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED" || msg === "PROJECT_CLOSED") {
       const map: Record<string, string> = {
         INVALID_TOKEN: "Invalid or revoked token",
         UNAUTHORIZED_SCOPE: "Token not authorized for this project",
         PERMISSION_DENIED: "Token lacks required permission",
+        PROJECT_CLOSED: "Project is closed — no new registrations allowed",
       };
       return errorResponse(msg, map[msg]);
     }
@@ -214,6 +262,7 @@ export async function handlePostEvent(
     const user = verifyToken(ctx.db, token);
     if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
     assertPermission(user, "write");
+    assertProjectNotClosed(ctx.db, project);
 
     const sender = getOptional(params, "sender") ?? user.role;
     const scope = getOptional(params, "scope") ?? "*";
@@ -225,11 +274,12 @@ export async function handlePostEvent(
     return successResponse({ eventId: ev.id });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED") {
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE" || msg === "PERMISSION_DENIED" || msg === "PROJECT_CLOSED") {
       const map: Record<string, string> = {
         INVALID_TOKEN: "Invalid or revoked token",
         UNAUTHORIZED_SCOPE: "Token not authorized for this project",
         PERMISSION_DENIED: "Token lacks required permission",
+        PROJECT_CLOSED: "Project is closed — no new events allowed",
       };
       return errorResponse(msg, map[msg]);
     }
@@ -384,5 +434,87 @@ export async function handleUnlinkFile(
     return successResponse({ deleted: true });
   } catch (err) {
     return errorResponse("VALIDATION_ERROR", (err as Error).message);
+  }
+}
+
+// ── publishCharter handler ─────────────────────────────────
+
+export async function handlePublishCharter(
+  args: unknown,
+  ctx: ToolContext
+): Promise<{ content: { type: string; text: string }[] }> {
+  const params = args as Record<string, unknown>;
+  try {
+    const project = getRequired(params, "project");
+    const content = getRequired(params, "content");
+    const token = getRequired(params, "token");
+
+    const user = verifyToken(ctx.db, token);
+    if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertPmRole(user);
+    assertProjectAccess(user, project);
+
+    const store = new CharterStore(ctx.db);
+    const charter = store.publish({ project, content, published_by: user.role });
+
+    return successResponse({ guid: charter.guid, timestamp: charter.published_at });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "INVALID_TOKEN" || msg === "PERMISSION_DENIED") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        PERMISSION_DENIED: "Only PM can publish charter",
+      };
+      return errorResponse(msg, map[msg]);
+    }
+    return errorResponse("VALIDATION_ERROR", msg);
+  }
+}
+
+// ── syncCharter handler ────────────────────────────────────
+
+export async function handleSyncCharter(
+  args: unknown,
+  ctx: ToolContext
+): Promise<{ content: { type: string; text: string }[] }> {
+  const params = args as Record<string, unknown>;
+  try {
+    const project = getRequired(params, "project");
+    const token = getRequired(params, "token");
+
+    const user = verifyToken(ctx.db, token);
+    if (!user) return errorResponse("INVALID_TOKEN", "Invalid or revoked token");
+    assertProjectAccess(user, project);
+    assertProjectNotClosed(ctx.db, project);
+
+    const charterStore = new CharterStore(ctx.db);
+    const charter = charterStore.getByProject(project);
+
+    const projectStore = new (await import("../storage/projects.js")).ProjectStore(ctx.db);
+    const proj = projectStore.findById(project);
+
+    return successResponse({
+      charter: charter
+        ? {
+            content: charter.content,
+            guid: charter.guid,
+            published_at: charter.published_at,
+            updated_at: charter.updated_at,
+          }
+        : null,
+      project: proj
+        ? { id: proj.id, name: proj.name, status: proj.status }
+        : null,
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "INVALID_TOKEN" || msg === "UNAUTHORIZED_SCOPE") {
+      const map: Record<string, string> = {
+        INVALID_TOKEN: "Invalid or revoked token",
+        UNAUTHORIZED_SCOPE: "Token not authorized for this project",
+      };
+      return errorResponse(msg, map[msg]);
+    }
+    return errorResponse("VALIDATION_ERROR", msg);
   }
 }

@@ -70,6 +70,22 @@ export class RegistrationStore {
     return rows[0] ?? null;
   }
 
+  findPm(projectId: string): Registration | undefined {
+    const rows = this.db.exec<Registration>(
+      `SELECT * FROM registrations WHERE project_id = ? AND role = 'pm' AND status = 'online'`,
+      [projectId]
+    );
+    return rows[0];
+  }
+
+  hasPm(projectId: string): boolean {
+    const rows = this.db.exec<{ c: number }>(
+      `SELECT COUNT(*) as c FROM registrations WHERE project_id = ? AND role = 'pm' AND status = 'online'`,
+      [projectId]
+    );
+    return (rows[0]?.c ?? 0) > 0;
+  }
+
   list(projectId?: string): Registration[] {
     if (projectId) {
       return this.db.exec<Registration>(

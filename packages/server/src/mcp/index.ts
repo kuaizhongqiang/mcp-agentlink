@@ -20,6 +20,7 @@ import { verifyToken } from "../auth/index.js";
 import { RegistrationStore } from "../storage/registrations.js";
 import { EventStore } from "../storage/events.js";
 import { ProjectStore } from "../storage/projects.js";
+import { CharterStore } from "../storage/charters.js";
 import { getServerStatus, setVersion } from "./handlers.js";
 import {
   toolDefinitions,
@@ -30,6 +31,8 @@ import {
   handleLinkFile,
   handleQueryLinks,
   handleUnlinkFile,
+  handlePublishCharter,
+  handleSyncCharter,
 } from "./tools.js";
 
 interface McpServerState {
@@ -111,6 +114,10 @@ export async function startServer(port: number = 3000): Promise<void> {
           return handleQueryLinks(args, ctx);
         case "unlinkFile":
           return handleUnlinkFile(args, ctx);
+        case "publishCharter":
+          return handlePublishCharter(args, ctx);
+        case "syncCharter":
+          return handleSyncCharter(args, ctx);
         default:
           return {
             content: [{ type: "text", text: JSON.stringify({ error: { code: "UNKNOWN_TOOL", message: `Unknown tool: ${name}` } }) }],
@@ -244,6 +251,49 @@ export async function startServer(port: number = 3000): Promise<void> {
     res.json({
       registrationId: reg.id,
       status: reg.status,
+    });
+  });
+
+  /**
+   * POST /api/agent/sync
+   *
+   * Sync project charter and status to local cache. Returns the latest
+   * charter content and project status for the caller's project.
+   */
+  app.post("/api/agent/sync", (req, res) => {
+    const { project, token } = req.body ?? {};
+    if (!project || !token) {
+      res.status(400).json({ error: "Missing project or token" });
+      return;
+    }
+
+    const user = verifyToken(db, token);
+    if (!user) {
+      res.status(401).json({ error: "Invalid or revoked token" });
+      return;
+    }
+    if (user.projectId !== project) {
+      res.status(403).json({ error: "Token not authorized for this project" });
+      return;
+    }
+
+    const charterStore = new CharterStore(db);
+    const charter = charterStore.getByProject(project);
+
+    const projectStore = new ProjectStore(db);
+    const proj = projectStore.findById(project);
+
+    res.json({
+      charter: charter
+        ? {
+            content: charter.content,
+            guid: charter.guid,
+            published_at: charter.published_at,
+          }
+        : null,
+      project: proj
+        ? { id: proj.id, name: proj.name, status: proj.status }
+        : null,
     });
   });
 
