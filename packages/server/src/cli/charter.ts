@@ -30,10 +30,8 @@ export function registerCharterCommands(program: Command): void {
       let token = options.token;
       if (!token) {
         try {
-          const { join } = await import("node:path");
           const tokenPath = join(process.cwd(), ".mcp-agentlink", "token");
           if (existsSync(tokenPath)) {
-            const { readFileSync } = await import("node:fs");
             token = readFileSync(tokenPath, "utf-8").trim();
           }
         } catch {
