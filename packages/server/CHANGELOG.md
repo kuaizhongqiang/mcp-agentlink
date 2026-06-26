@@ -1,5 +1,11 @@
 # Changelog — mcp-agentlink-server
 
+## [0.5.1] - 2026-06-26
+
+### Updated
+
+- Documentation: README.md, packages READMEs, pm-audit-report.md updated to v0.5.0
+
 ## [0.5.0] - 2026-06-26
 
 ### Added
