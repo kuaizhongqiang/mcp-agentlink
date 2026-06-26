@@ -18,6 +18,7 @@ import { registerTokenCommands } from "./token.js";
 import { registerRegisterCommands } from "./register.js";
 import { registerEventCommands } from "./event.js";
 import { registerLinkCommands } from "./link.js";
+import { registerCharterCommands } from "./charter.js";
 
 // Read version from package.json to keep a single source of truth
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -65,5 +66,6 @@ registerTokenCommands(program);
 registerRegisterCommands(program);
 registerEventCommands(program);
 registerLinkCommands(program);
+registerCharterCommands(program);
 
 program.parse(process.argv);

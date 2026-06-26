@@ -63,3 +63,45 @@ export function assertPermission(
     throw new Error("PERMISSION_DENIED");
   }
 }
+
+/**
+ * Assert that the user has the PM role.
+ * Throws with PERMISSION_DENIED if the user is not a PM.
+ */
+export function assertPmRole(user: AuthUser | null): void {
+  if (!user) throw new Error("INVALID_TOKEN");
+  if (user.role !== "pm") throw new Error("PERMISSION_DENIED");
+}
+
+/**
+ * Assert that a project has a registered PM.
+ * Throws with NO_PM if no PM is registered for the project.
+ */
+export function assertProjectHasPm(
+  db: Database,
+  projectId: string
+): void {
+  const rows = db.exec<{ c: number }>(
+    `SELECT COUNT(*) as c FROM registrations
+     WHERE project_id = ? AND role = 'pm' AND status = 'online'`,
+    [projectId]
+  );
+  if ((rows[0]?.c ?? 0) === 0) throw new Error("NO_PM");
+}
+
+/**
+ * Assert that a project is not closed.
+ * Throws with PROJECT_CLOSED if the project status is 'closed'.
+ */
+export function assertProjectNotClosed(
+  db: Database,
+  projectId: string
+): void {
+  const rows = db.exec<{ status: string }>(
+    "SELECT status FROM projects WHERE id = ?",
+    [projectId]
+  );
+  if (rows.length > 0 && rows[0].status === "closed") {
+    throw new Error("PROJECT_CLOSED");
+  }
+}
