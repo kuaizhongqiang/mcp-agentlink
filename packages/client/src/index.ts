@@ -11,5 +11,35 @@
  * This package is a thin bridge: `init` is local, MCP tools proxy to server.
  */
 
-export { init, readToken, readConfig } from "./init.js";
-export type { InitParams, InitResult } from "./init.js";
+export {
+  init,
+  readToken,
+  readConfig,
+  readGlobalConfig,
+  writeGlobalConfig,
+  addProjectToGlobal,
+  writeProjectIdentity,
+  readProjectIdentity,
+  writeCharterCache,
+  readCharterCache,
+  writeSyncMeta,
+  readSyncMeta,
+  detectLegacyConfig,
+  migrateLegacyConfig,
+  sync,
+  getSyncStatus,
+  writeSkillFile,
+  detectRepo,
+  detectAgentName,
+  generateSender,
+  setGlobalDir,
+} from "./init.js";
+
+export type {
+  InitParams,
+  InitResult,
+  ProjectIdentity,
+  GlobalConfig,
+  SyncMeta,
+  SyncResult,
+} from "./init.js";
