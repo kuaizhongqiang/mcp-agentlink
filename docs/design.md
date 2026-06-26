@@ -489,3 +489,15 @@ DevOps:
   ├── 性能优化
   └── 监控与日志
 ```
+
+### Phase 4 ✅
+
+```text
+  ├── PM 角色机制（register --role pm、project close）
+  ├── Charter 系统（五层框架、publishCharter/syncCharter）
+  ├── 本地存储重构（两层结构：全局 + 项目级）
+  ├── 数据流重构（五阶段流程、/agentlink sync）
+  ├── CLI 输出增强（表格、JSON、分页）
+  ├── Skill 正式化（自动注册 skill）
+  └── Sender 自动生成（{repo}/{agent} 格式）
+```

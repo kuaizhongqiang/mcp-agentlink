@@ -4,8 +4,10 @@
 
 import type { Command } from "commander";
 import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { getApp } from "../app/index.js";
 import { CharterStore } from "../storage/charters.js";
+import { verifyToken, assertPmRole } from "../auth/index.js";
 
 export function registerCharterCommands(program: Command): void {
   const charter = program.command("charter").description("Manage project charter");
@@ -28,10 +30,8 @@ export function registerCharterCommands(program: Command): void {
       let token = options.token;
       if (!token) {
         try {
-          const { join } = await import("node:path");
           const tokenPath = join(process.cwd(), ".mcp-agentlink", "token");
           if (existsSync(tokenPath)) {
-            const { readFileSync } = await import("node:fs");
             token = readFileSync(tokenPath, "utf-8").trim();
           }
         } catch {
@@ -44,21 +44,35 @@ export function registerCharterCommands(program: Command): void {
         process.exit(1);
       }
 
-      // We call the CharterStore directly here, but in a full PM workflow
-      // the user would use the MCP publishCharter tool or pass a PM token.
-      // For CLI simplicity, we call the store directly (bypasses MCP auth).
-      // PM auth is enforced at the MCP tool level.
+      // Validate token and verify PM role
       const db = await getApp();
+      const user = verifyToken(db, token);
+      if (!user) {
+        console.error("❌ Invalid or revoked token.");
+        process.exit(1);
+      }
+      if (user.projectId !== options.project) {
+        console.error(`❌ Token not authorized for project "${options.project}".`);
+        process.exit(1);
+      }
+      try {
+        assertPmRole(user);
+      } catch {
+        console.error("❌ Only PM can publish charter. The provided token is not a PM token.");
+        process.exit(1);
+      }
+
       const store = new CharterStore(db);
       const charter = store.publish({
         project: options.project,
         content,
-        published_by: "cli",
+        published_by: user.role,
       });
 
       console.log(`✅ Charter published for "${options.project}"`);
       console.log(`   GUID:      ${charter.guid}`);
       console.log(`   Published: ${charter.published_at}`);
+      console.log(`   By:        ${user.role}`);
     });
 
   charter

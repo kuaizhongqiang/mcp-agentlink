@@ -16,7 +16,7 @@ mcp-agentlink — an MCP (Model Context Protocol) server for cross-project, cros
 
 ## Current Status
 
-Phase 1 (MVP) complete — all 8 implementation steps finished and verified. See [Implementation Roadmap](#implementation-roadmap) for details.
+**v0.5.0** — Phases 1-4 all complete. See [Implementation Roadmap](#implementation-roadmap) for details.
 
 ## Design Documents
 
@@ -165,6 +165,14 @@ server_url: https://mcp-agentlink.example.com
 - Event history & statistics
 - Finer-grained auth
 - Performance & monitoring
+
+### Phase 4 — Collaborative Governance ✅ (completed 2026-06-26)
+
+- **PM role mechanism**: register --role pm, project close, PM_EXISTS/NO_PM errors
+- **Charter system**: charters table, publishCharter/syncCharter MCP tools, GUID versioning
+- **Local storage**: ~/.mcp-agentlink/ (global) + .mcp-agentlink/ (project-level) two-layer structure
+- **Data flow sync**: /agentlink sync, POST /api/agent/sync REST endpoint
+- **Client enhancements**: format utilities, skill formalization, sender auto-generation
 
 ## Key Conventions
 

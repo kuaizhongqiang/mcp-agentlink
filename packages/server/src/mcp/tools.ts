@@ -7,6 +7,7 @@ import { RegistrationStore } from "../storage/registrations.js";
 import { EventStore } from "../storage/events.js";
 import { FileLinkStore } from "../storage/fileLinks.js";
 import { CharterStore } from "../storage/charters.js";
+import { ProjectStore } from "../storage/projects.js";
 import {
   verifyToken,
   assertProjectAccess,
@@ -490,7 +491,7 @@ export async function handleSyncCharter(
     const charterStore = new CharterStore(ctx.db);
     const charter = charterStore.getByProject(project);
 
-    const projectStore = new (await import("../storage/projects.js")).ProjectStore(ctx.db);
+    const projectStore = new ProjectStore(ctx.db);
     const proj = projectStore.findById(project);
 
     return successResponse({

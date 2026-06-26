@@ -240,7 +240,31 @@ export async function startServer(port: number = 3000): Promise<void> {
       return;
     }
 
+    // Check project is not closed
+    const projectStatus = db.exec<{ status: string }>(
+      "SELECT status FROM projects WHERE id = ?", [project]
+    );
+    if (projectStatus.length > 0 && projectStatus[0].status === "closed") {
+      res.status(403).json({ error: "Project is closed" });
+      return;
+    }
+
     const store = new RegistrationStore(db);
+
+    // PM registration logic (same as MCP handleRegister)
+    if (role === "pm") {
+      const existingPm = store.findPm(project);
+      if (existingPm && existingPm.sender !== sender) {
+        res.status(409).json({ error: "Project already has a PM" });
+        return;
+      }
+    } else {
+      if (!store.hasPm(project)) {
+        res.status(403).json({ error: "Project has no PM — register a PM first" });
+        return;
+      }
+    }
+
     const reg = store.register({ project, sender, role, workpath, giturl });
 
     if (!reg) {
